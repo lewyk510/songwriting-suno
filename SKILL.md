@@ -18,7 +18,7 @@ license: MIT
 compatibility: Bundled scripts need Python 3.10+ and no network. UPDATE mode may use network to re-verify sources. Suno feature details change fast — treat references/10-13 as dated and verify on help.suno.com before relying on limits or pricing.
 metadata:
   domain: music
-  updated: 2026-10-31
+  updated: 2026-11-03
 ---
 
 # Songwriting + Suno
@@ -167,6 +167,7 @@ Helper scripts (run with `python3`):
 - `scripts/validate_structure.py` — check section tags and basic song shape.
 - `scripts/check_freshness.py` — report per-file staleness from `assets/freshness.json` (exit 0 fresh / 1 stale / 2 registry problem); `--check-sources` (implied by `--check-coverage`) also flags broken source URLs.
 - `scripts/check_evals.py` — structural check of `evals/evals.json`: unique non-empty ids, required fields, referenced script/asset paths exist (exit 0 valid / 1 findings / 2 usage).
+- `scripts/run_evals.py` — grade one eval case's recorded artifacts (`style_prompt.txt` / `lyrics.txt`) against its machine-checkable success criteria; the rest need a judge (exit 0 no FAIL / 1 FAIL / 2 usage or spec drift).
 - `scripts/selftest.py` — one cwd-independent command that runs the whole bundle's checks (script help, unit tests, freshness coverage, tool fixtures); it must exit 0.
 - `scripts/source_check.py` — helper module for source-URL validation, imported by `check_freshness.py` (not run directly).
 

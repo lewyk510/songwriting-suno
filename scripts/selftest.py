@@ -7,29 +7,33 @@ lyric tools on built-in fixtures, and JSON sanity of the asset files.
 
 All paths are resolved from this script's own location (skill root =
 parent of scripts/), so it runs from any working directory. Runs no network;
-its only writes are a throwaway install destination that the install check
-deletes again — check failures are evidence, never auto-fixed.
+its only writes are throwaway directories (the install smoke destination and
+the eval-runner artifacts) that the checks delete again — check failures are
+evidence, never auto-fixed.
 
 Checks (in order):
-  1. help        every scripts/*.py except selftest.py and anything under
-                 scripts/tests/ answers --help with exit code 0; scripts
-                 are auto-discovered with Path.glob so future scripts are
-                 covered automatically
+  1. help        every scripts/*.py CLI except selftest.py answers --help
+                 with exit code 0 and a usage: line; modules without a CLI
+                 (source_check.py) are SKIPped; scripts are auto-discovered
+                 with Path.glob so future scripts are covered automatically
   2. unittest    python3 -m unittest discover over scripts/tests (and any
                  nested tests/ dir) — all tests must pass
   3. freshness   check_freshness.py --check-coverage exits 0
-  4. structure   validate_structure.py exits 0 on the built-in fixture
+  4. evals       check_evals.py exits 0 on the repo's evals/evals.json
+                 (structural contract: ids, fields, path references)
+  5. runner      run_evals.py grades the built-in citypop artifact fixture
+                 and must report 4 PASS / 0 FAIL (machine-checkable criteria
+                 only; the rest is JUDGE)
+  6. structure   validate_structure.py exits 0 on the built-in fixture
                  '[Verse]\nline one\n[Chorus]\nbig hook\n'
-  5. meter       syllable_meter.py --expect 5,6 exits 0 on the built-in
+  7. meter       syllable_meter.py --expect 5,6 exits 0 on the built-in
                  fixture 'Hello world tonight\nI feel the city light\n'
-  6. lyric_lint  lyric_lint.py exits 1 on a built-in cliche fixture
+  8. lyric_lint  lyric_lint.py exits 1 on a built-in cliche fixture
                  ('reach for the stars' / 'dance in the rain'), proving the
                  linter is wired end to end; SKIP if the script is absent
-  7. json        evals/evals.json, assets/freshness.json and
+  9. json        evals/evals.json, assets/freshness.json and
                  assets/persona-presets.json each parse with json.load
-  8. evals       check_evals.py exits 0 on the repo's evals/evals.json
-                 (structural contract: ids, fields, path references)
-  9. install     install.sh installs the bundle into a throwaway directory
+ 10. install     install.sh installs the bundle into a throwaway directory
                  with the payload present and repo-dev artifacts (.git,
                  .github, .gitignore, AGENTS.md) absent; SKIP without bash
 
@@ -113,13 +117,18 @@ def describe(proc: subprocess.CompletedProcess[str]) -> str:
     return f"exit={proc.returncode} | {head}"
 
 
+NO_CLI = {"selftest.py", "source_check.py"}
+
+
 def check_help(script: Path) -> CheckResult | None:
-    """Check 1: one script answers --help with exit 0; None = not a target."""
+    """Check 1: one CLI answers --help with usage text; None = not a target."""
     if script.name == "selftest.py":
         return None
+    if script.name == "source_check.py":
+        return CheckResult("help:source_check.py", SKIP, "module, not a CLI")
     proc = run_tool([str(script), "--help"])
-    verdict = PASS if proc.returncode == 0 else FAIL
-    return CheckResult(f"help:{script.name}", verdict, describe(proc))
+    ok = proc.returncode == 0 and "usage:" in (proc.stdout or "")
+    return CheckResult(f"help:{script.name}", PASS if ok else FAIL, describe(proc))
 
 
 def script_help_checks() -> list[CheckResult]:
@@ -169,6 +178,38 @@ def check_evals_structure() -> CheckResult:
     proc = run_tool([str(SCRIPTS_DIR / "check_evals.py")])
     verdict = PASS if proc.returncode == 0 else FAIL
     return CheckResult("evals:structure", verdict, describe(proc))
+
+
+def check_evals_runner() -> CheckResult:
+    """Check 5: run_evals.py grades built-in artifacts, 4 PASS / 0 FAIL."""
+    with tempfile.TemporaryDirectory(prefix="swsuno-eval-runner-") as tmp:
+        artifacts = Path(tmp) / "art"
+        artifacts.mkdir()
+        (artifacts / "style_prompt.txt").write_text(
+            "city-pop, melancholic, 92 BPM, retro synth, female vocal\nEXCLUDE: EDM\n",
+            encoding="utf-8",
+        )
+        (artifacts / "lyrics.txt").write_text(
+            "[Verse 1]\n\u8def\u706f\u4e0b\u7684\u65e7\u7ad9\u53f0\n[Chorus]\none more night in the rain\n",
+            encoding="utf-8",
+        )
+        proc = run_tool(
+            [
+                str(SCRIPTS_DIR / "run_evals.py"),
+                "--case",
+                "citypop-bilingual-leaving-home",
+                "--dir",
+                str(artifacts),
+                "--json",
+            ]
+        )
+    try:
+        summary = json.loads(proc.stdout)["summary"]
+        ok = proc.returncode == 0 and summary["failed"] == 0 and summary["passed"] == 4
+        detail = f"passed={summary['passed']}, failed={summary['failed']}, judge={summary['judge']}"
+    except (json.JSONDecodeError, KeyError):
+        ok, detail = False, describe(proc)
+    return CheckResult("evals:runner", PASS if ok else FAIL, detail)
 
 
 def check_lyric_lint_fixture() -> CheckResult:
@@ -230,6 +271,7 @@ def run_checks() -> list[CheckResult]:
     checks.extend(check_unittest(d) for d in tests_dirs())
     checks.append(check_freshness_coverage())
     checks.append(check_evals_structure())
+    checks.append(check_evals_runner())
 
     structure = run_tool(
         [str(SCRIPTS_DIR / "validate_structure.py")], STRUCTURE_FIXTURE

@@ -43,7 +43,7 @@ def build_parser():
             "      --instruments \"analog synth, drum machine\" --vocal \"female, airy\" \\\n"
             "      --exclude \"harsh vocals\"\n"
             "Output:\n"
-            "  synth-pop, melancholic, 110 BPM, analog synth, drum machine, female, airy\n"
+            "  synth-pop, melancholic, 110 BPM, female, airy, analog synth, drum machine\n"
             "  EXCLUDE: harsh vocals"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,

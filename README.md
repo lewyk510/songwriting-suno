@@ -71,6 +71,8 @@ scripts/                 runnable tools (prefer running over reading)
   validate_structure.py  section tags + basic song shape
   check_freshness.py     staleness report from assets/freshness.json
   source_check.py        URL lint for sources in references
+  check_evals.py         structural check of evals/evals.json (ids, fields, path refs)
+  run_evals.py           grade one eval case's artifacts (machine-checkable slice)
   selftest.py            one command that runs every check
   tests/                 stdlib unittest suite (runs the CLIs via subprocess)
 assets/                  templates, presets, registries, offline data
@@ -82,7 +84,7 @@ assets/                  templates, presets, registries, offline data
   song-template.md       output template
   freshness.json         what to re-verify and when
   learner-profile.md     learner profile template (copy outside the repo)
-evals/evals.json         behavioral spec: 19 cases (spec only, no runner)
+evals/evals.json         behavioral spec: 19 cases; run_evals.py grades the machine-checkable slice
 .github/workflows/ci.yml CI: selftest + unittest on PRs and pushes to main/master
 ```
 

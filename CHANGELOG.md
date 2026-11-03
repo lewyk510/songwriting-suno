@@ -8,6 +8,20 @@ See `references/50-self-update.md` for the full update protocol.
 
 ---
 
+## 2026-11-03 — review fixes from the three-model panel (eval runner hardening)
+
+- **Touched:** `scripts/run_evals.py`, `scripts/tests/test_run_evals.py`, `scripts/selftest.py`, `install.sh`, `scripts/format_style_prompt.py`, `README.md`, `SKILL.md`, `assets/freshness.json`, this changelog
+- **Facts changed:** no Suno facts changed — fault-finding panel (Gemini 3.8 Flash, DeepSeek V4.1 Flash, GLM 5.3) reviewed the eval-runner slice and the repo; 31 findings, 29 fixed: bilingual check no longer counts section tags as lyric content (the false-positive class), comma/descriptor/loud-vocal conjuncts are really checked, the verse/chorus gap is counted in the runner (validate_structure only warns), malformed `--evals` and unreadable artifacts exit 2 instead of crashing, tags match case-insensitively, `EXCLUDE: (none)` is a valid EXCLUDE line while an empty value fails, empty criteria exit 2, the CJK class matches syllable_meter's, PASS details name exactly what was checked; selftest's help check now demands a `usage:` line (source_check.py SKIPs as a module), evals:runner asserts 4 PASS / 0 FAIL via --json, and the docstring order matches the code; install.sh accepts an existing empty target dir and refuses a destination inside the source tree; format_style_prompt's epilog example matches the real output order; README/SKILL.md/scripts-AGENTS list run_evals.py. Tests grew to 148 with the false-positive probes (each mutation-relevant class now has a must-FAIL case).
+- **Sources:** none — no external facts consulted
+- **Freshness:** `SKILL.md` row re-verified -> 2026-11-03 (tool list + updated field; no other rows changed)
+
+## 2026-11-03 — eval runner first slice (machine-checkable criteria)
+
+- **Touched:** `scripts/run_evals.py` (new), `scripts/tests/test_run_evals.py` (new), `scripts/selftest.py`, this changelog
+- **Facts changed:** no Suno facts changed — first slice of the behavioral eval runner: `run_evals.py --case <id> --dir <artifacts>` grades the deterministic subset of one case's success_criteria from the recorded artifacts (style_prompt.txt shape/budget/EXCLUDE, validate_structure exit 0, section tags, bilingual detection) and marks the rest JUDGE for the model-in-the-loop grader; the per-case CHECKS registry pins a verbatim fragment per criterion so an evals.json rewording exits 2 (criterion drift) instead of silently checking the wrong thing; 6 of 19 cases have machine checks; selftest gained check 10 `evals:runner` (19 checks total), tests are 136 (13 new, mutation-proven).
+- **Sources:** none — no external facts consulted
+- **Freshness:** none — no fact-bearing reference changed
+
 ## 2026-11-02 — packaging gate + source_check coverage (ulw pass 2)
 
 - **Touched:** `install.sh`, `scripts/selftest.py`, `scripts/tests/test_source_check.py` (new), this changelog
