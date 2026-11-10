@@ -120,6 +120,12 @@ class CheckEvalsTests(unittest.TestCase):
             data["findings"],
         )
 
+    def test_empty_evals_list_exits_2(self) -> None:
+        self.fx.write(spec([]))
+        proc = self.fx.run()
+        self.assertEqual(proc.returncode, 2, proc.stdout)
+        self.assertIn("list is empty", proc.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

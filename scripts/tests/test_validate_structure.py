@@ -193,6 +193,13 @@ class UsageErrorTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 2, proc.stdout)
         self.assertIn("no input: pass a file or pipe lyrics via stdin", proc.stderr)
 
+    # --- usage 5: unreadable file is a usage error, not "structure errors" ----
+    def test_missing_file_exit_2(self) -> None:
+        proc = run_cli("/no/such/lyrics.txt")
+        self.assertEqual(proc.returncode, 2, proc.stderr)
+        self.assertIn("cannot read /no/such/lyrics.txt", proc.stderr)
+        self.assertNotIn("Traceback", proc.stderr)
+
     # --- usage 4: empty piped stdin is validated (no chorus), not exit 2 ------
     def test_empty_stdin_is_no_chorus_failure(self) -> None:
         proc = run_cli(stdin="")

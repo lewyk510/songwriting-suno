@@ -4,6 +4,8 @@
 Heuristic (approximate, no pronunciation dictionary):
 - per word: count vowel groups (runs of aeiouy), subtract one silent
   trailing 'e' (kept for -le/-ee/-ye/-oe/-ie endings), floor at 1.
+  Contractions are one word ("won't" = 1); consonant + n't adds one
+  ("didn't" = 2).
 - CJK characters (Hanzi, kana, Hangul) count as exactly 1 unit each —
   --lang cjk makes that explicit; --lang auto (default) detects CJK runs.
   These are meter aids, not phonetic ground truth.
@@ -20,7 +22,10 @@ import re
 import sys
 
 VOWELS = re.compile(r"[aeiouy]+")
-WORD = re.compile(r"[A-Za-z]+")
+# A word keeps its inner apostrophes ("won't", "coffee's") so a contraction
+# is metered as one word instead of two.
+WORD = re.compile(r"[A-Za-z]+(?:['\u2019][A-Za-z]+)*")
+CONSONANT_NT = re.compile(r"[^aeiouy]n['\u2019]t$")
 # Basic CJK detector: kana, CJK ideographs (+ ext A / compat), Hangul syllables.
 CJK = re.compile(r"[\u3040-\u30ff\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]")
 KEEP_E = ("le", "ee", "ye", "oe", "ie")
@@ -29,7 +34,9 @@ KEEP_E = ("le", "ee", "ye", "oe", "ie")
 def syllables_en(word):
     """Heuristic syllable count for one ASCII word (min 1)."""
     w = word.lower()
-    n = len(VOWELS.findall(w))
+    extra = 1 if CONSONANT_NT.search(w) else 0  # did-n't, could-n't (not won't)
+    w = w.replace("'", "").replace("\u2019", "")
+    n = len(VOWELS.findall(w)) + extra
     if w.endswith("e") and n > 1 and not w.endswith(KEEP_E):
         n -= 1  # silent trailing 'e'
     return max(n, 1)
@@ -70,8 +77,11 @@ def main():
     if args.text is not None:
         text = args.text.replace("\\n", "\n")
     elif args.file:
-        with open(args.file, encoding="utf-8") as fh:
-            text = fh.read()
+        try:
+            with open(args.file, encoding="utf-8") as fh:
+                text = fh.read()
+        except (OSError, UnicodeDecodeError) as exc:
+            ap.error(f"cannot read {args.file}: {exc}")
     elif not sys.stdin.isatty():
         text = sys.stdin.read()
     else:

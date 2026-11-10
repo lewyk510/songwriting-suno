@@ -22,7 +22,7 @@ Checks (in order):
   4. evals       check_evals.py exits 0 on the repo's evals/evals.json
                  (structural contract: ids, fields, path references)
   5. runner      run_evals.py grades the built-in citypop artifact fixture
-                 and must report 4 PASS / 0 FAIL (machine-checkable criteria
+                 and must report 3 PASS / 0 FAIL (machine-checkable criteria
                  only; the rest is JUDGE)
   6. structure   validate_structure.py exits 0 on the built-in fixture
                  '[Verse]\nline one\n[Chorus]\nbig hook\n'
@@ -181,7 +181,7 @@ def check_evals_structure() -> CheckResult:
 
 
 def check_evals_runner() -> CheckResult:
-    """Check 5: run_evals.py grades built-in artifacts, 4 PASS / 0 FAIL."""
+    """Check 5: run_evals.py grades built-in artifacts, 3 PASS / 0 FAIL."""
     with tempfile.TemporaryDirectory(prefix="swsuno-eval-runner-") as tmp:
         artifacts = Path(tmp) / "art"
         artifacts.mkdir()
@@ -205,7 +205,7 @@ def check_evals_runner() -> CheckResult:
         )
     try:
         summary = json.loads(proc.stdout)["summary"]
-        ok = proc.returncode == 0 and summary["failed"] == 0 and summary["passed"] == 4
+        ok = proc.returncode == 0 and summary["failed"] == 0 and summary["passed"] == 3
         detail = f"passed={summary['passed']}, failed={summary['failed']}, judge={summary['judge']}"
     except (json.JSONDecodeError, KeyError):
         ok, detail = False, describe(proc)

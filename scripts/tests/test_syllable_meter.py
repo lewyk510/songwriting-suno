@@ -237,6 +237,28 @@ class UsageErrorTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 2)
         self.assertIn("invalid choice", proc.stderr)
 
+    # --- usage 4: unreadable file is a usage error, not a finding -------------
+    def test_missing_file_exit_2(self) -> None:
+        proc = run_cli("/no/such/lyrics.txt")
+        self.assertEqual(proc.returncode, 2, proc.stderr)
+        self.assertIn("cannot read /no/such/lyrics.txt", proc.stderr)
+        self.assertNotIn("Traceback", proc.stderr)
+
+
+class ContractionTests(unittest.TestCase):
+    def test_contraction_is_one_word(self) -> None:
+        for word, want in (("won't", 1), ("I'm", 1), ("don't", 1), ("they're", 1),
+                           ("coffee's", 2), ("won\u2019t", 1)):
+            self.assertEqual(syllable_meter.syllables_en(word), want, word)
+
+    def test_consonant_nt_keeps_its_syllable(self) -> None:
+        for word, want in (("didn't", 2), ("couldn't", 2), ("wasn't", 2)):
+            self.assertEqual(syllable_meter.syllables_en(word), want, word)
+
+    def test_line_with_contractions(self) -> None:
+        self.assertEqual(syllable_meter.count_line("I won't go", "auto")[0], 3)
+        self.assertEqual(syllable_meter.count_line("I'm home", "auto")[0], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

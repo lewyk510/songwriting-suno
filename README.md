@@ -67,7 +67,7 @@ references/              topic files, read on demand
 scripts/                 runnable tools (prefer running over reading)
   format_style_prompt.py assemble a Suno style + exclude prompt
   syllable_meter.py      count syllables / check a target meter
-  lyric_lint.py          rhyme scheme / repetition / cliche lint
+  lyric_lint.py          rhyme scheme / repetition / cliche / machine-tell lint
   validate_structure.py  section tags + basic song shape
   check_freshness.py     staleness report from assets/freshness.json
   source_check.py        URL lint for sources in references

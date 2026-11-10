@@ -18,7 +18,7 @@ license: MIT
 compatibility: Bundled scripts need Python 3.10+ and no network. UPDATE mode may use network to re-verify sources. Suno feature details change fast — treat references/10-13 as dated and verify on help.suno.com before relying on limits or pricing.
 metadata:
   domain: music
-  updated: 2026-11-03
+  updated: 2026-11-10
 ---
 
 # Songwriting + Suno
@@ -163,7 +163,7 @@ must survive every self-update.
 Helper scripts (run with `python3`):
 - `scripts/format_style_prompt.py` — assemble a Suno style + exclude prompt.
 - `scripts/syllable_meter.py` — count syllables per line; check a target meter.
-- `scripts/lyric_lint.py` — approximate rhyme scheme / near-rhyme / repetition / line-spread / cliché lint (exit 0 clean / 1 findings / 2 usage).
+- `scripts/lyric_lint.py` — approximate rhyme scheme / near-rhyme / repetition / line-spread / cliché + machine-lyric-tell lint (density rules: negation frames actionable, anaphora/imagery advisory; exit 0 clean / 1 actionable findings / 2 usage).
 - `scripts/validate_structure.py` — check section tags and basic song shape.
 - `scripts/check_freshness.py` — report per-file staleness from `assets/freshness.json` (exit 0 fresh / 1 stale / 2 registry problem); `--check-sources` (implied by `--check-coverage`) also flags broken source URLs.
 - `scripts/check_evals.py` — structural check of `evals/evals.json`: unique non-empty ids, required fields, referenced script/asset paths exist (exit 0 valid / 1 findings / 2 usage).
