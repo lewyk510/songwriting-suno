@@ -330,6 +330,12 @@ class FormatStylePromptLimitTests(unittest.TestCase):
             cmd, capture_output=True, text=True, cwd=None if cwd is None else str(cwd)
         )
 
+    def test_non_positive_tempo_exits_2(self) -> None:
+        for tempo in ("0", "-5"):
+            proc = self.run_format("--genre", "pop", f"--tempo={tempo}")
+            self.assertEqual(proc.returncode, 2, proc.stdout)
+            self.assertIn("must be a positive integer", proc.stderr)
+
     def test_default_limit_is_200_with_matching_warning(self) -> None:
         long_tag = "x" * 250
         proc = self.run_format("--genre", long_tag)

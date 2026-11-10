@@ -27,8 +27,13 @@ repeats are normal): a normalized line appearing >= --min-repeat times
 (default 2) is reported, and only counts strictly above --min-repeat are
 treated as actionable.
 
-Exit code: 0 = no actionable findings, 1 = cliche hit or a repetition
-count above --min-repeat, 2 = usage problem. --warn-only forces exit 0
+- Machine-lyric tells are density rules over one section or the whole
+  sheet (see NEGATION_FRAME_RE / ANAPHORA_MIN / IMAGERY_WORDS). Only
+  negation_frame is actionable; anaphora_run and imagery_cluster are
+  advisory because human writers use both on purpose.
+
+Exit code: 0 = no actionable findings, 1 = cliche hit, a repetition
+count above --min-repeat, or an actionable tell, 2 = usage problem. --warn-only forces exit 0
 for findings (usage errors still exit 2). --json prints a structured
 report and keeps the same exit codes.
 
@@ -48,7 +53,8 @@ import sys
 
 TAG_RE = re.compile(r"^\s*\[([^\[\]]+)\]\s*$")  # shared with validate_structure.py
 VOWELS = re.compile(r"[aeiouy]+")
-TRAILING_WORD = re.compile(r"([A-Za-z]+)[^A-Za-z]*$")
+# Inner apostrophes stay in the word so "won't"/"don't" rhyme on "ont".
+TRAILING_WORD = re.compile(r"([A-Za-z]+(?:['\u2019][A-Za-z]+)*)[^A-Za-z]*$")
 WORD_RE = re.compile(r"[A-Za-z]+")
 CJK = re.compile(r"[\u3040-\u30ff\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]")
 
@@ -85,7 +91,62 @@ CLICHE_LIST: tuple[str, ...] = (
     "dancing in the moonlight",
     "you are my everything",
     "all night long",
+    # Added 2026-11-10 from machine-written samples the list missed.
+    "stole my heart",
+    "heart skip a beat",
+    "heart skips a beat",
+    "heart skipped a beat",
+    "burning bright",
+    "nothing left to lose",
+    "won't back down",
+    "pieces of my heart",
+    "fire in my veins",
+    "break the silence",
+    "forever young",
+    "born to fly",
+    "the tide is gonna turn",
+    "beneath the stars",
+    # Mandarin stock phrases (matched as substrings; Chinese has no word spaces).
+    "\u601d\u5ff5\u50cf\u6f6e\u6c34",  # 思念像潮水
+    "\u6cea\u6c34\u8fd8\u662f\u96e8\u6c34",  # 泪水还是雨水
+    "\u753b\u4e0b\u53e5\u53f7",  # 画下句号
+    "\u56de\u5230\u4f60\u8eab\u65c1",  # 回到你身旁
+    "\u5343\u91cc\u4e4b\u5916",  # 千里之外
+    "\u56de\u4e0d\u53bb\u4e86",  # 回不去了
+    "\u6d77\u67af\u77f3\u70c2",  # 海枯石烂
+    "\u5929\u957f\u5730\u4e45",  # 天长地久
+    "\u523b\u9aa8\u94ed\u5fc3",  # 刻骨铭心
+    "\u6495\u5fc3\u88c2\u80ba",  # 撕心裂肺
 )
+
+# Machine-lyric tells beyond fixed phrases. Density rules, never single-word
+# bans: one use of any of these is ordinary writing.
+#   negation_frame  "I'm not X, I'm just Y" / "not X, but Y" lines (needs a
+#                   pronoun subject and a punctuation turn — comma/semicolon,
+#                   dash, or ellipsis — so imperatives like "Don't look back,
+#                   just drive" and scene-setting "Not a sound, only rain"
+#                   are spared); two or more distinct per section is ACTIONABLE.
+#   anaphora_run    three or more distinct lines in a section opening on the
+#                   same word (Maybe.../Every...). Advisory: also a real device.
+#   imagery_cluster four or more distinct stock-atmosphere words in the whole
+#                   sheet. Advisory: some genres live on this vocabulary.
+NEGATION_FRAME_RE = re.compile(
+    r"\b(?:i|you|we|it|he|she|they|this|that)\b[^,;.\u2014\u2013-]{0,20}?"
+    r"(?:\bnot\b|n['\u2019]t\b)[^,;.\u2014\u2013-]{0,30}"
+    r"(?:[,;\u2014\u2013-]|\.\.\.|\u2026)\s*(?:[\w'\u2019]+\s+){0,2}(?:but|just|only)\b",
+    re.IGNORECASE,
+)
+NEGATION_FRAME_MIN = 2
+ANAPHORA_MIN = 3
+ANAPHORA_SKIP = frozenset(
+    "i i'm im and the a an you we he she they but oh yeah in on so my your it to of with".split()
+)
+IMAGERY_WORDS = frozenset(
+    "neon chrome static midnight skyline shadow shadows echo echoes whisper whispers "
+    "ember embers ash ashes thunder storm storms silhouette silhouettes "
+    "kaleidoscope kaleidoscopes tapestry tapestries symphony symphonies velvet ethereal".split()
+)
+IMAGERY_MIN = 4
 
 
 def norm_phrase(text: str) -> str:
@@ -98,6 +159,56 @@ CLICHE_PATTERNS: tuple[tuple[str, str], ...] = tuple(
 )
 
 
+def cliche_hit(needle: str, normalized_line: str) -> bool:
+    """Whole-word match; CJK needles match as substrings with spaces dropped."""
+    if CJK.search(needle):
+        return needle.replace(" ", "") in normalized_line.replace(" ", "")
+    return f" {needle} " in f" {normalized_line} "
+
+
+def find_tells(sections: list[dict], lyric_lines: list[dict]) -> list[dict]:
+    """Density-gated machine-lyric tells (see the constants above)."""
+    tells: list[dict] = []
+    for position, section in enumerate(sections):
+        index = section.get("index", position + 1)
+        distinct: dict[str, dict] = {}
+        for entry in section["lines"]:
+            distinct.setdefault(norm_phrase(entry["text"]), entry)
+        frames = [e["n"] for e in distinct.values() if NEGATION_FRAME_RE.search(e["text"])]
+        if len(frames) >= NEGATION_FRAME_MIN:
+            tells.append({
+                "rule": "negation_frame", "actionable": True, "section": index,
+                "tag": section["tag"], "lines": frames,
+                "detail": f"{len(frames)} 'not X, just/but Y' lines in one section",
+            })
+        openers: dict[str, list[int]] = {}
+        for normalized, entry in distinct.items():
+            first = normalized.split(" ", 1)[0]
+            if CJK.search(first):
+                first = first[:1]  # CJK has no spaces: the opener is the first character
+            if first and first not in ANAPHORA_SKIP:
+                openers.setdefault(first, []).append(entry["n"])
+        for first, numbers in openers.items():
+            if len(numbers) >= ANAPHORA_MIN:
+                tells.append({
+                    "rule": "anaphora_run", "actionable": False, "section": index,
+                    "tag": section["tag"], "lines": numbers,
+                    "detail": f"{len(numbers)} lines open on '{first}'",
+                })
+    found: dict[str, int] = {}
+    for entry in lyric_lines:
+        for word in norm_phrase(entry["text"]).split():
+            if word in IMAGERY_WORDS:
+                found.setdefault(word, entry["n"])
+    if len(found) >= IMAGERY_MIN:
+        tells.append({
+            "rule": "imagery_cluster", "actionable": False, "section": None,
+            "tag": None, "lines": sorted(found.values()),
+            "detail": f"{len(found)} stock-atmosphere words: {', '.join(sorted(found))}",
+        })
+    return tells
+
+
 def rhyme_key(line: str) -> tuple[str | None, str | None]:
     """Return (key, nucleus) from the line's trailing alphabetic word.
 
@@ -108,7 +219,7 @@ def rhyme_key(line: str) -> tuple[str | None, str | None]:
     match = TRAILING_WORD.search(line)
     if not match:
         return None, None
-    word = match.group(1).lower()
+    word = match.group(1).lower().replace("'", "").replace("\u2019", "")
     last = None
     for group in VOWELS.finditer(word):
         last = group
@@ -306,12 +417,21 @@ def analyze(text: str, min_repeat: int = 2, no_cliche: bool = False) -> dict:
     cliche_matches: list[dict] = []
     if not no_cliche:
         for e in lyric_lines:
-            haystack = f" {norm_phrase(e['text'])} "
+            haystack = norm_phrase(e["text"])
             for cliche, needle in CLICHE_PATTERNS:
-                if f" {needle} " in haystack:
+                if cliche_hit(needle, haystack):
                     cliche_matches.append(
                         {"line": e["n"], "text": e["text"], "cliche": cliche}
                     )
+
+    tell_sections: list[dict] = [
+        dict(section, index=i) for i, section in enumerate(sections, 1)
+    ]
+    if preamble:
+        # Untagged sheets and preamble lines are lyrics too: scan them as a
+        # pseudo-section so the tell rules cannot be dodged by dropping tags.
+        tell_sections.insert(0, {"tag": "(preamble)", "lines": preamble, "index": 0})
+    tells = find_tells(tell_sections, lyric_lines)
 
     return {
         "tool": "lyric_lint",
@@ -324,7 +444,10 @@ def analyze(text: str, min_repeat: int = 2, no_cliche: bool = False) -> dict:
         "repeats": repeats,
         "cliche_matches": cliche_matches,
         "cliche_scan_disabled": bool(no_cliche),
-        "actionable": bool(cliche_matches) or any(r["excessive"] for r in repeats),
+        "tells": tells,
+        "actionable": bool(cliche_matches)
+        or any(r["excessive"] for r in repeats)
+        or any(t["actionable"] for t in tells),
     }
 
 
@@ -384,6 +507,14 @@ def print_report(res: dict) -> None:
             print("  (none)")
         for hit in res["cliche_matches"]:
             print(f"  line {hit['line']}: matched '{hit['cliche']}'")
+    print("Machine-lyric tells (density rules; advisory unless marked actionable):")
+    if not res["tells"]:
+        print("  (none)")
+    for tell in res["tells"]:
+        where = f"[{tell['tag']}]" if tell["tag"] else "whole sheet"
+        kind = "actionable" if tell["actionable"] else "advisory"
+        shown = ", ".join(str(n) for n in tell["lines"])
+        print(f"  {tell['rule']} | {kind} | {where} | {tell['detail']} | lines {shown}")
     if res["actionable"] and res.get("warn_only"):
         print("Result: PASS (--warn-only: findings present, exit forced to 0)")
     else:
@@ -402,8 +533,8 @@ def main(argv: list[str] | None = None) -> int:
             "Example:\n"
             "  python3 %(prog)s --text \"[Verse]\\nI drive until the streetlights end"
             "\\nThe engine hums your name\"\n"
-            "Exit code: 0 = no actionable findings, 1 = cliche hit or repetition\n"
-            "above --min-repeat, 2 = usage problem. --warn-only forces 0 for findings."
+            "Exit code: 0 = no actionable findings, 1 = cliche hit, repetition above\n"
+            "--min-repeat, or an actionable tell; 2 = usage problem. --warn-only forces 0."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -418,7 +549,7 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=2,
         metavar="N",
-        help="report lines appearing >= N times (default 2); counts strictly above N are actionable",
+        help="report lines appearing >= max(N, 2) times (default 2); counts strictly above N are actionable",
     )
     ap.add_argument(
         "--warn-only",
@@ -434,7 +565,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             with open(args.file, encoding="utf-8") as fh:
                 text = fh.read()
-        except OSError as exc:
+        except (OSError, UnicodeDecodeError) as exc:
             ap.error(f"cannot read {args.file}: {exc}")
     elif args.text is not None:
         text = args.text.replace("\\n", "\n")

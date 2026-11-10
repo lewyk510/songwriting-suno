@@ -25,7 +25,7 @@ Exit codes:
     0  no findings
     1  at least one structural finding
     2  usage error, file not readable, not valid JSON, or the top-level
-       shape is unusable (not an object / "evals" missing or not a list)
+       shape is unusable (not an object / "evals" missing, not a list, or empty)
 
 Usage:
   python3 check_evals.py [file] [--json]     # default: <skill>/evals/evals.json
@@ -206,6 +206,9 @@ def main(argv: list[str] | None = None) -> int:
     evals = spec_evals(spec)
     if evals is None:
         print('ERROR: spec must have an "evals" list', file=sys.stderr)
+        return 2
+    if not evals:
+        print('ERROR: spec "evals" list is empty (nothing to check)', file=sys.stderr)
         return 2
 
     findings = all_findings(evals)

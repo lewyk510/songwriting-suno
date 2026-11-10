@@ -245,6 +245,7 @@ class JsonTests(unittest.TestCase):
                 "repeats",
                 "cliche_matches",
                 "cliche_scan_disabled",
+                "tells",
                 "actionable",
             },
         )
@@ -314,6 +315,185 @@ class DeterminismTests(unittest.TestCase):
             "[Verse]\ncity light\nsky so high\n[Chorus]\nla la la la\nla la la la\n"
         )
         self.assertEqual(lyric_lint.analyze(text), lyric_lint.analyze(text))
+
+
+class MachineTellTests(unittest.TestCase):
+    """Each tell rule: must-flag samples next to look-alike lines it must spare."""
+
+    def tells(self, text: str) -> list[dict]:
+        return lyric_lint.analyze(text)["tells"]
+
+    def rules(self, text: str) -> list[str]:
+        return [t["rule"] for t in self.tells(text)]
+
+    def test_two_negation_frames_in_a_section_are_actionable(self) -> None:
+        text = "[Chorus]\nI'm not broken, I'm just bruised\nI'm not over you, I'm just learning\n"
+        res = lyric_lint.analyze(text)
+        self.assertEqual([t["rule"] for t in res["tells"]], ["negation_frame"])
+        self.assertEqual(res["tells"][0]["lines"], [2, 3])
+        self.assertTrue(res["actionable"])
+
+    def test_one_negation_frame_is_ordinary_writing(self) -> None:
+        text = "[Verse]\nShe's not angry, but she won't say why\nthe kettle clicks off in the dark\n"
+        res = lyric_lint.analyze(text)
+        self.assertEqual(res["tells"], [])
+        self.assertFalse(res["actionable"])
+
+    def test_negation_frames_in_different_sections_do_not_add_up(self) -> None:
+        text = (
+            "[Verse]\nI'm not broken, I'm just bruised\n"
+            "[Bridge]\nI'm not over you, I'm just learning\n"
+        )
+        self.assertEqual(self.rules(text), [])
+
+    def test_repeating_one_negation_line_is_not_two_frames(self) -> None:
+        text = "[Chorus]\nI'm not broken, I'm just bruised\nI'm not broken, I'm just bruised\n"
+        self.assertEqual(self.rules(text), [])
+
+    def test_plain_negation_without_the_turn_is_spared(self) -> None:
+        text = "[Verse]\nI did not call, I did not write\nyou can't stay, the lease is up\n"
+        self.assertEqual(self.rules(text), [])
+
+    def test_first_person_turn_is_not_a_negation_frame(self) -> None:
+        # "not X, I Y" is an ordinary human turn, not the but/just/only frame;
+        # pins the contrast-word list against a stray alternation member.
+        text = (
+            "[Verse]\nI'm not here to fight, I came to dance\n"
+            "I'm not trying to be cruel, I mean it kind\n"
+        )
+        self.assertEqual(self.rules(text), [])
+
+    def test_imperative_negation_lookalike_is_spared(self) -> None:
+        # Council round 1 (DeepSeek F1): "Don't X, just Y" has no pronoun
+        # subject; density gating alone would still make two of these
+        # actionable, so the frame requires a subject and these stay spare.
+        text = "[Chorus]\nDon't look back, just drive\nDon't slow down, only forward\n"
+        self.assertEqual(self.rules(text), [])
+
+    def test_clause_initial_not_lookalike_is_spared(self) -> None:
+        text = "[Verse]\nNot a sound, only rain\nNot a trace, just silence\n"
+        self.assertEqual(self.rules(text), [])
+
+    def test_negation_frame_accepts_dash_and_ellipsis_separators(self) -> None:
+        em_dash = "[Verse]\nI'm not broken \u2014 just bruised\nI'm not angry \u2014 only late\n"
+        hyphen = "[Verse]\nI'm not broken - just bruised\nI'm not angry - only late\n"
+        ellipsis = "[Verse]\nI'm not broken... just bruised\nI'm not angry... only late\n"
+        self.assertEqual(self.rules(em_dash), ["negation_frame"])
+        self.assertEqual(self.rules(hyphen), ["negation_frame"])
+        self.assertEqual(self.rules(ellipsis), ["negation_frame"])
+
+    def test_preamble_and_untagged_lines_are_scanned_for_tells(self) -> None:
+        # Council round 1 (Gemini): dropping the tags used to dodge the tell
+        # rules entirely; untagged sheets and preamble lines are a
+        # pseudo-section now.
+        untagged = "I'm not broken, I'm just bruised\nI'm not over you, I'm just learning\n"
+        self.assertEqual(self.rules(untagged), ["negation_frame"])
+        preamble = (
+            "I'm not broken, I'm just bruised\nI'm not over you, I'm just learning\n"
+            "[Verse]\nthe kettle clicks off in the dark\n"
+        )
+        res = lyric_lint.analyze(preamble)
+        self.assertEqual([t["rule"] for t in res["tells"]], ["negation_frame"])
+        self.assertEqual(res["tells"][0]["tag"], "(preamble)")
+        self.assertEqual(res["tells"][0]["section"], 0)
+
+    def test_anaphora_run_is_advisory(self) -> None:
+        text = (
+            "[Bridge]\nMaybe love is just a season\nMaybe we were meant to break\n"
+            "Maybe that's the lie I make\n"
+        )
+        res = lyric_lint.analyze(text)
+        self.assertEqual([t["rule"] for t in res["tells"]], ["anaphora_run"])
+        self.assertFalse(res["tells"][0]["actionable"])
+        self.assertFalse(res["actionable"])
+
+    def test_two_shared_openers_or_function_words_are_not_a_run(self) -> None:
+        two = "[Bridge]\nMaybe love is just a season\nMaybe we were meant to break\nthe porch light stays on\n"
+        function_words = "[Verse]\nI woke up late\nI missed the train\nI walked the bridge\n"
+        third_person = "[Verse]\nShe woke up\nShe packed her bags\nShe left at dawn\n"
+        self.assertEqual(self.rules(two), [])
+        self.assertEqual(self.rules(function_words), [])
+        self.assertEqual(self.rules(third_person), [])
+
+    def test_cjk_openers_run_on_first_character(self) -> None:
+        text = "[Verse]\n\u4f60\u8bf4\u7684\u8bdd\n\u4f60\u5199\u7684\u4fe1\n\u4f60\u7559\u7684\u706f\n"
+        res = lyric_lint.analyze(text)
+        self.assertEqual([t["rule"] for t in res["tells"]], ["anaphora_run"])
+        self.assertFalse(res["tells"][0]["actionable"])
+
+    def test_imagery_cluster_needs_four_distinct_words(self) -> None:
+        four = "[Verse]\nNeon bleeding on the asphalt\nChrome and static in the rain\nMidnight on the wire\n"
+        three = "[Verse]\nNeon sign above the laundromat\nThe chrome on the bumper peeled\nStatic on the radio\n"
+        res = lyric_lint.analyze(four)
+        self.assertEqual([t["rule"] for t in res["tells"]], ["imagery_cluster"])
+        self.assertFalse(res["actionable"])
+        self.assertEqual(self.rules(three), [])
+
+    def test_imagery_singular_forms_count_too(self) -> None:
+        # Council round 1 (Gemini): singular/plural inflection must not gate
+        # the cluster ("shadow" is as stock as "shadows").
+        text = (
+            "[Verse]\nA shadow on the wall\nAn echo down the hall\n"
+            "A whisper in the quiet\nA single ash falls down\n"
+        )
+        self.assertEqual(self.rules(text), ["imagery_cluster"])
+
+    def test_repeated_imagery_word_counts_once(self) -> None:
+        text = "[Verse]\nneon neon neon neon\nneon on the neon sign\n"
+        self.assertEqual(self.rules(text), [])
+
+    def test_actionable_tell_drives_exit_code_and_report(self) -> None:
+        text = "[Chorus]\nI'm not broken, I'm just bruised\nI'm not over you, I'm just learning\n"
+        proc = run_cli("--text", text)
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn("negation_frame | actionable | [Chorus]", proc.stdout)
+        self.assertEqual(run_cli("--text", text, "--warn-only").returncode, 0)
+
+    def test_binary_file_exits_2(self) -> None:
+        # Council round 1 (GLM): a non-UTF8 sheet crashed with a traceback and
+        # exit 1, which reads as "actionable findings"; usage errors exit 2.
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "bad.txt"
+            bad.write_bytes(b"\xff\xfe\x00not utf8")
+            proc = run_cli(str(bad))
+        self.assertEqual(proc.returncode, 2, proc.stdout)
+        self.assertIn("cannot read", proc.stderr)
+
+
+class AddedClicheTests(unittest.TestCase):
+    def hits(self, text: str) -> list[str]:
+        return [m["cliche"] for m in lyric_lint.analyze(text)["cliche_matches"]]
+
+    def test_contraction_phrase_matches_through_punctuation(self) -> None:
+        self.assertEqual(self.hits("[Chorus]\nI won't back down, not now\n"), ["won't back down"])
+
+    def test_heart_skips_inflections_match(self) -> None:
+        # Council round 1 (GLM): word-boundary matching never hits the
+        # inflected forms; both are listed.
+        self.assertEqual(self.hits("[Chorus]\nmy heart skips a beat\n"), ["heart skips a beat"])
+        self.assertEqual(self.hits("[Verse]\nmy heart skipped a beat\n"), ["heart skipped a beat"])
+
+    def test_phrase_needs_whole_words(self) -> None:
+        self.assertEqual(self.hits("[Verse]\nshe stole my heartbeat monitor\n"), [])
+
+    def test_mandarin_stock_phrase_matches_inside_a_line(self) -> None:
+        line = "\u601d\u5ff5\u50cf\u6f6e\u6c34\u4e00\u6837\u6d8c\u6765"
+        self.assertEqual(self.hits(f"[Verse]\n{line}\n"), ["\u601d\u5ff5\u50cf\u6f6e\u6c34"])
+
+    def test_mandarin_phrase_matches_across_a_sung_space(self) -> None:
+        line = "\u6211\u60f3\u56de\u5bb6 \u56de\u5230 \u4f60\u8eab\u65c1"
+        self.assertEqual(self.hits(f"[Chorus]\n{line}\n"), ["\u56de\u5230\u4f60\u8eab\u65c1"])
+
+    def test_plain_mandarin_line_is_clean(self) -> None:
+        line = "\u6211\u60f3\u56de\u5bb6\u62ff\u4ef6\u5916\u5957"
+        self.assertEqual(self.hits(f"[Verse]\n{line}\n"), [])
+
+
+class ContractionRhymeTests(unittest.TestCase):
+    def test_contractions_rhyme_on_the_whole_word(self) -> None:
+        res = lyric_lint.analyze("[Verse]\nI won't\nshe don't\n")
+        self.assertEqual(res["groups"][1]["scheme"], "AA")
+        self.assertEqual(lyric_lint.rhyme_key("I won\u2019t"), ("ont", "o"))
 
 
 if __name__ == "__main__":

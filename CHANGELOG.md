@@ -8,6 +8,13 @@ See `references/50-self-update.md` for the full update protocol.
 
 ---
 
+## 2026-11-10 — lyric_lint machine-tells + eval-runner expansion
+
+- **Touched:** `scripts/lyric_lint.py`, `scripts/syllable_meter.py`, `scripts/validate_structure.py`, `scripts/format_style_prompt.py`, `scripts/check_evals.py`, `scripts/run_evals.py`, `scripts/selftest.py`, `scripts/tests/` (six of seven test files), `SKILL.md`, `README.md`, `assets/freshness.json`, this changelog
+- **Facts changed:** no Suno facts changed — `lyric_lint.py`: +14 English and +10 Mandarin stock clichés (CJK needles match as substrings, spaces dropped), density-gated machine-lyric tells (negation_frame ACTIONABLE at 2+ distinct per section, and only with a pronoun subject plus a punctuation turn — comma/semicolon/dash/ellipsis — so imperatives like "Don't look back, just drive" and scene-setting "Not a sound, only rain" are spared; anaphora_run advisory, CJK openers counted by first character, he/she/they skipped like i/you/we; imagery_cluster advisory with singular and plural forms; untagged sheets and preamble lines scanned as a pseudo-section), contraction-aware rhyme keys and syllable counts (inner apostrophes kept, consonant + n't adds a syllable: "didn't" = 2), non-UTF8 input files exit 2; `run_evals.py`: machine-checkable share 23/84 criteria across 7/19 cases — four criteria carrying transcript/process conjuncts (citypop #4, wedding #3, trap #2, kpop #4) deliberately stay JUDGE so a PASS certifies only the conjuncts actually inspected, and text mode now prints PASS/JUDGE details too; check_tag `contains` case-insensitive; iteration-log header detected by label row instead of assumed first; template-order FAIL names the all-headings requirement; CLI hardening: unreadable/non-UTF8 input exits 2 via argparse error, `--tempo` positive-int, empty evals list exits 2. Suite 207 tests; mutation-checked — the negation subject requirement, dash/ellipsis separators, preamble scanning and the `i` contrast-word variant are each pinned by a named test. Fixes from a three-model review panel (Gemini 3.8 Flash, DeepSeek V4.1 Flash, GLM 5.3) applied in the same pass.
+- **Sources:** none — no external facts consulted
+- **Freshness:** `SKILL.md` row re-verified -> 2026-11-10 (lyric_lint tool-list description updated; no other rows changed)
+
 ## 2026-11-03 — review fixes from the three-model panel (eval runner hardening)
 
 - **Touched:** `scripts/run_evals.py`, `scripts/tests/test_run_evals.py`, `scripts/selftest.py`, `install.sh`, `scripts/format_style_prompt.py`, `README.md`, `SKILL.md`, `assets/freshness.json`, this changelog

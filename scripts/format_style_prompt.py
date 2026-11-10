@@ -23,7 +23,7 @@ DEFAULT_CHAR_LIMIT = 200
 
 
 def positive_int(value: str) -> int:
-    """--limit must be a positive integer (argparse errors exit with code 2)."""
+    """--limit / --tempo must be positive integers (argparse errors exit with code 2)."""
     try:
         parsed = int(value)
     except ValueError:
@@ -50,7 +50,7 @@ def build_parser():
     )
     p.add_argument("--genre", help="primary genre, e.g. synth-pop")
     p.add_argument("--mood", help="mood / emotion, e.g. melancholic")
-    p.add_argument("--tempo", type=int, help="tempo in BPM, e.g. 110")
+    p.add_argument("--tempo", type=positive_int, help="tempo in BPM, e.g. 110")
     p.add_argument("--instruments", help='comma-separated instrument list, e.g. "analog synth, drum machine"')
     p.add_argument("--vocal", help='vocal description, e.g. "female, breathy"')
     p.add_argument("--era", help="era flavor, e.g. 80s")

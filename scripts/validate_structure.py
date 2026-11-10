@@ -71,8 +71,11 @@ def main():
     args = ap.parse_args()
 
     if args.file:
-        with open(args.file, encoding="utf-8") as fh:
-            text = fh.read()
+        try:
+            with open(args.file, encoding="utf-8") as fh:
+                text = fh.read()
+        except (OSError, UnicodeDecodeError) as exc:
+            ap.error(f"cannot read {args.file}: {exc}")
     elif not sys.stdin.isatty():
         text = sys.stdin.read()
     else:
